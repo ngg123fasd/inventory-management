@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 Factory Inventory Management System Demo with GitHub integration - Full-stack application with Vue 3 frontend, Python FastAPI backend, and in-memory mock data (no database).
 
 ## Critical Tool Usage Rules
@@ -28,23 +30,55 @@ Use the Task tool with these specialized subagents for appropriate tasks:
 - **Backend**: Python FastAPI (port 8001)
 - **Data**: JSON files in `server/data/` loaded via `server/mock_data.py`
 
-## Quick Start
+## Commands
 
 ```bash
 # Backend
-cd server
-uv run python main.py
+cd server && uv run python main.py
 
 # Frontend
-cd client
-npm install && npm run dev
+cd client && npm install && npm run dev
+
+# Run all backend tests
+cd tests && uv run pytest backend/ -v
+
+# Run a single test file
+cd tests && uv run pytest backend/test_inventory.py -v
+
+# Run a single test by name
+cd tests && uv run pytest backend/ -k "test_function_name" -v
+
+# Run tests with coverage
+cd tests && uv run pytest backend/ --cov
 ```
 
-## Key Patterns
+No lint tooling is configured (no ESLint, Prettier, black, or ruff).
 
-**Filter System**: 4 filters (Time Period, Warehouse, Category, Order Status) apply to all data via query params
-**Data Flow**: Vue filters → `client/src/api.js` → FastAPI → In-memory filtering → Pydantic validation → Computed properties
-**Reactivity**: Raw data in refs (`allOrders`, `inventoryItems`), derived data in computed properties
+## Architecture
+
+### Filter System
+`client/src/composables/useFilters.js` is a **global singleton** — it exports reactive refs directly, not a factory function. Every component that calls `useFilters()` shares the same 4 refs (`selectedPeriod`, `selectedLocation`, `selectedCategory`, `selectedStatus`). Changes in `FilterBar.vue` immediately propagate to all views. `getCurrentFilters()` maps these to API query params.
+
+### Data Flow
+Vue filters → `client/src/api.js` (axios, `http://localhost:8001/api`) → FastAPI → In-memory filtering via `apply_filters()` / `filter_by_month()` → Pydantic validation → Computed properties in Vue views
+
+### State Management
+No Vuex or Pinia. `useFilters` is the only app-wide state. All other state (fetched data, modal visibility) is component-local refs. Each view fetches on mount with no caching or request deduplication.
+
+### i18n / Currency
+`useI18n.js` persists locale to localStorage. Switching language (en/ja) automatically switches currency (USD/JPY) — it is not a separate user setting. The `currentCurrency` computed property is derived from `currentLocale`.
+
+### Backend Data Loading
+`server/mock_data.py` loads all JSON files once at startup into module-level globals. **A server restart is required to pick up changes to any file in `server/data/`.**
+
+## Known Gaps (Incomplete Features)
+`client/src/api.js` calls endpoints that **do not exist in `server/main.py`**:
+- `GET/POST/DELETE /api/tasks` — used by `TasksModal.vue`
+- `GET/POST /api/purchase-orders` — used by `BacklogDetailModal.vue`
+
+These will return 404. Do not add frontend logic that depends on them without first adding the backend endpoints.
+
+Several KPIs in `Dashboard.vue` are hardcoded in the Vue template (Inventory Turnover: 4.2, Avg Processing Time: 8.5 days) — they are not returned by any API endpoint.
 
 ## API Endpoints
 - `GET /api/inventory` - Filters: warehouse, category
@@ -52,6 +86,14 @@ npm install && npm run dev
 - `GET /api/dashboard/summary` - All filters
 - `GET /api/demand`, `/api/backlog` - No filters
 - `GET /api/spending/*` - Summary, monthly, categories, transactions
+- `GET /api/reports/quarterly`, `/api/reports/monthly-trends`
+
+Backend supports quarters (`Q1-2025`) and direct months (`2025-01`) for the `month` filter param.
+
+## Tests
+- `tests/pytest.ini`: asyncio_mode = auto, testpaths = backend
+- `tests/backend/conftest.py`: provides `client` (FastAPI TestClient), `sample_inventory_item`, and `sample_order` fixtures
+- No frontend tests exist (no Vitest/Jest config)
 
 ## Common Issues
 1. Use unique keys in v-for (not `index`) - use `sku`, `month`, etc.
@@ -62,13 +104,17 @@ npm install && npm run dev
 
 ## File Locations
 - Views: `client/src/views/*.vue`
+- Components: `client/src/components/*.vue`
+- Composables: `client/src/composables/` (useFilters.js, useI18n.js, useAuth.js)
 - API Client: `client/src/api.js`
 - Backend: `server/main.py`, `server/mock_data.py`
 - Data: `server/data/*.json`
-- Styles: `client/src/App.vue`
+- Global styles: `client/src/App.vue`
 
 ## Design System
 - Colors: Slate/gray (#0f172a, #64748b, #e2e8f0)
 - Status: green/blue/yellow/red
 - Charts: Custom SVG, CSS Grid for layouts
 - No emojis in UI
+- Warehouses: San Francisco, London, Tokyo
+- Categories: Circuit Boards, Sensors, Actuators, Controllers

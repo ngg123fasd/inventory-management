@@ -8,6 +8,37 @@
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else>
+      <!-- Submitted Restocking Orders — only shown when at least one order has been placed -->
+      <div v-if="restockingOrders.length > 0" class="card restocking-orders-card">
+        <div class="card-header">
+          <h3 class="card-title">Submitted Restocking Orders</h3>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Order Number</th>
+                <th>Date Placed</th>
+                <th>Items</th>
+                <th>Total Value</th>
+                <th>Expected Delivery</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="order in restockingOrders" :key="order.id">
+                <td><strong>{{ order.order_number }}</strong></td>
+                <td>{{ formatDate(order.order_date) }}</td>
+                <td>{{ order.items.length }} item(s)</td>
+                <td><strong>{{ formatCurrency(order.total_value) }}</strong></td>
+                <td>{{ formatDate(order.expected_delivery) }}</td>
+                <td><span class="badge info">{{ order.status }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="stats-grid">
         <div class="stat-card success">
           <div class="stat-label">{{ t('status.delivered') }}</div>
@@ -83,10 +114,12 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { api } from '../api'
 import { useFilters } from '../composables/useFilters'
 import { useI18n } from '../composables/useI18n'
+import { useRestockingOrders } from '../composables/useRestockingOrders'
 
 export default {
   name: 'Orders',
   setup() {
+    const { restockingOrders } = useRestockingOrders()
     const { t, currentCurrency, translateProductName, translateCustomerName } = useI18n()
 
     const currencySymbol = computed(() => {
@@ -143,6 +176,9 @@ export default {
       return statusMap[status] || 'info'
     }
 
+    const formatCurrency = (val) =>
+      val.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+
     const formatDate = (dateString) => {
       const { currentLocale } = useI18n()
       const locale = currentLocale.value === 'ja' ? 'ja-JP' : 'en-US'
@@ -160,9 +196,11 @@ export default {
       loading,
       error,
       orders,
+      restockingOrders,
       getOrdersByStatus,
       getOrderStatusClass,
       formatDate,
+      formatCurrency,
       currencySymbol,
       translateProductName,
       translateCustomerName
@@ -275,5 +313,9 @@ export default {
 .item-meta {
   font-size: 0.813rem;
   color: #64748b;
+}
+
+.restocking-orders-card {
+  border-left: 4px solid #2563eb;
 }
 </style>
